@@ -1,4 +1,4 @@
-name: Deploy static content to Pages
+name: Build and Push Docker Container
 
 on:
   push:
@@ -6,8 +6,7 @@ on:
 
 permissions:
   contents: read
-  pages: write
-  id-token: write
+  packages: write # Required to push Docker containers to GitHub
 
 jobs:
   # LEVEL 2: Automated testing
@@ -36,25 +35,28 @@ jobs:
           scan-ref: '.'
           scanners: 'vuln,secret,config'
           format: 'table'
-          exit-code: '1' # The '1' tells GitHub to fail the pipeline if a threat is found
+          exit-code: '1' 
           severity: 'CRITICAL,HIGH'
 
-  # Deployment job
-  deploy:
-    needs: [test, security] # deployment now waits for BOTH to pass!
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+  # LEVEL 4: Build and Push Docker Container
+  build-and-push:
+    needs: [test, security] # Still waits for quality gates!
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
+      - name: Checkout code
         uses: actions/checkout@v4
-      - name: Setup Pages
-        uses: actions/configure-pages@v4
-      - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3
+        
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
         with:
-          path: '.'
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }} # GitHub provides this automatically!
+          
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          # This tags the container using your GitHub username and repo name automatically
+          tags: ghcr.io/${{ github.repository }}/my-website:latest
