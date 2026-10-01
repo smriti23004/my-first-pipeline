@@ -10,7 +10,7 @@ permissions:
   id-token: write
 
 jobs:
-  # LEVEL 2: Our new automated testing job
+  # LEVEL 2: Automated testing
   test:
     runs-on: ubuntu-latest
     steps:
@@ -23,9 +23,25 @@ jobs:
       - name: Run HTML Linter
         run: npx htmlhint index.html
 
-  # Our existing deployment job
+  # LEVEL 3: DevSecOps Security Scan
+  security:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          scanners: 'vuln,secret,config'
+          format: 'table'
+          exit-code: '1' # The '1' tells GitHub to fail the pipeline if a threat is found
+          severity: 'CRITICAL,HIGH'
+
+  # Deployment job
   deploy:
-    needs: test  # This rule prevents deployment if the test fails!
+    needs: [test, security] # deployment now waits for BOTH to pass!
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
